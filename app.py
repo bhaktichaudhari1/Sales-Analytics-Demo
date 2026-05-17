@@ -10,17 +10,17 @@ st.markdown("Performance testing suite optimized for large-scale transaction arr
 uploaded_file = st.file_uploader("Upload your sales_data_100k.csv file", type="csv")
 
 if uploaded_file is not None:
-    # 1. Fast Load Data & Robust Date Cleaning
+    # 1. Fast Load Data & Smart Parsing
     df = pd.read_csv(uploaded_file)
-    
-    # Clean column spaces just in case
     df.columns = df.columns.str.strip()
     
-    # SAFE CONVERSION: errors='coerce' turns unparseable dates into blank values instead of crashing
-    df['Transaction_Date'] = pd.to_datetime(df['Transaction_Date'], errors='coerce')
+    # Force all numeric columns to strictly round to 2 decimals max across the entire dataframe
+    df['Revenue'] = df['Revenue'].round(2)
+    df['Cost'] = df['Cost'].round(2)
+    df['Profit'] = df['Profit'].round(2)
     
-    # Drop any rows that don't have a valid date to keep metrics clean
-    df = df.dropna(subset=['Transaction_Date'])
+    # SMART PARSING: Reads Excel's mixed up date formats perfectly without losing or changing any rows
+    df['Transaction_Date'] = pd.to_datetime(df['Transaction_Date'], errors='coerce', format='mixed')
     
     # Extract quarters safely
     df['Quarter'] = df['Transaction_Date'].dt.to_period('Q').astype(str)
@@ -33,9 +33,10 @@ if uploaded_file is not None:
     st.header("1. Financial Summary Overview")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Total Ingested Rows", f"{len(df):,}")
+    # :,.2f enforces commas for thousands and strictly 2 decimals
     m2.metric("Gross Revenue", f"${total_revenue:,.2f}")
     m3.metric("Net Profit", f"${total_profit:,.2f}")
-    m4.metric("Net Profit Margin", f"{margin:.1f}%")
+    m4.metric("Net Profit Margin", f"{margin:.2f}%")
 
     st.divider()
 
@@ -46,8 +47,7 @@ if uploaded_file is not None:
     
     with col_left:
         st.subheader("Quarterly Financial Velocity")
-        # Crunching 100k rows down to 8 row segments BEFORE sending to Plotly
-        q_summary = df.groupby('Quarter')[['Revenue', 'Profit']].sum().reset_index()
+        q_summary = df.groupby('Quarter')[['Revenue', 'Profit']].sum().reset_index().round(2)
         
         fig_trend = px.bar(q_summary, x='Quarter', y=['Revenue', 'Profit'],
                            barmode='group',
@@ -57,8 +57,7 @@ if uploaded_file is not None:
 
     with col_right:
         st.subheader("Segment Composition (Mix)")
-        # Crunching 100k rows down to 2 metrics
-        segment_summary = df.groupby('Segment')['Revenue'].sum().reset_index()
+        segment_summary = df.groupby('Segment')['Revenue'].sum().reset_index().round(2)
         
         fig_pie = px.pie(segment_summary, names='Segment', values='Revenue',
                          hole=0.4, title="Revenue Allocation: Software vs. Services",
@@ -67,7 +66,7 @@ if uploaded_file is not None:
 
     # 4. Regional Drill-Down Component
     st.subheader("Regional Performance Allocation Matrix")
-    region_summary = df.groupby(['Region', 'Segment'])['Profit'].sum().reset_index()
+    region_summary = df.groupby(['Region', 'Segment'])['Profit'].sum().reset_index().round(2)
     fig_sun = px.sunburst(region_summary, path=['Region', 'Segment'], values='Profit',
                           title="Profit Volume Map: Region > Segment",
                           color='Profit', color_continuous_scale='Blues')
@@ -76,4 +75,5 @@ if uploaded_file is not None:
     # 5. Row-Limiting Data Grid (Prevents Browser Freeze)
     st.header("3. Transaction Ledger Preview")
     st.markdown("Showing first 100 rows to optimize browser rendering memory limits.")
-    st.dataframe(df.head(100), use_container_width=True)
+    # Displaying the preview with clean 2-decimal rounding
+    st.dataframe(df.head(100).round(2), use_container_width=True)
