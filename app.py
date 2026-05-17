@@ -10,11 +10,19 @@ st.markdown("Performance testing suite optimized for large-scale transaction arr
 uploaded_file = st.file_uploader("Upload your sales_data_100k.csv file", type="csv")
 
 if uploaded_file is not None:
-    # 1. Fast Load Data
+    # 1. Fast Load Data & Robust Date Cleaning
     df = pd.read_csv(uploaded_file)
     
-    # Convert dates and extract quarters instantly
-    df['Transaction_Date'] = pd.to_datetime(df['Transaction_Date'])
+    # Clean column spaces just in case
+    df.columns = df.columns.str.strip()
+    
+    # SAFE CONVERSION: errors='coerce' turns unparseable dates into blank values instead of crashing
+    df['Transaction_Date'] = pd.to_datetime(df['Transaction_Date'], errors='coerce')
+    
+    # Drop any rows that don't have a valid date to keep metrics clean
+    df = df.dropna(subset=['Transaction_Date'])
+    
+    # Extract quarters safely
     df['Quarter'] = df['Transaction_Date'].dt.to_period('Q').astype(str)
 
     # 2. Executive Ratios
@@ -66,6 +74,6 @@ if uploaded_file is not None:
     st.plotly_chart(fig_sun, use_container_width=True)
 
     # 5. Row-Limiting Data Grid (Prevents Browser Freeze)
-    st.header("3. Transaction Ledger Ledger Preview")
+    st.header("3. Transaction Ledger Preview")
     st.markdown("Showing first 100 rows to optimize browser rendering memory limits.")
     st.dataframe(df.head(100), use_container_width=True)
